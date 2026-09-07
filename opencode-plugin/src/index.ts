@@ -268,6 +268,18 @@ const server: Plugin = async (input: PluginInput, options?: PluginOptions): Prom
         },
       },
 
+      [D.wi_attachments.name]: {
+        description: D.wi_attachments.description,
+        args: {
+          id: z.number().describe(D.wi_attachments.params.id),
+          dest: z.string().optional().describe(D.wi_attachments.params.dest),
+          profile: z.string().optional().describe(D.wi_attachments.params.profile),
+        },
+        async execute(args: { id: number; dest?: string; profile?: string }) {
+          return cmd.wiAttachments(await loadConfig(), args);
+        },
+      },
+
       [D.wi_query.name]: {
         description: D.wi_query.description,
         args: {

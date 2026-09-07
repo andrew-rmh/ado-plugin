@@ -944,6 +944,22 @@ export default function adoExtension(pi: ExtensionAPI) {
     },
   });
 
+  // ─── Tool: ado_wi_attachments ────────────────────────────
+
+  pi.registerTool({
+    name: D.wi_attachments.name,
+    label: "ADO List Attachments",
+    description: D.wi_attachments.description,
+    parameters: Type.Object({
+      id: Type.Number({ description: D.wi_attachments.params.id }),
+      dest: Type.Optional(Type.String({ description: D.wi_attachments.params.dest })),
+      profile: Type.Optional(Type.String({ description: D.wi_attachments.params.profile })),
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+      return asToolResult(cmd.wiAttachments, params);
+    },
+  });
+
   // ─── Tool: ado_wi_query ──────────────────────────────────
 
   pi.registerTool({

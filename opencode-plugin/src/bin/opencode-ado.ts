@@ -598,6 +598,11 @@ async function runWiGroup(argv: string[]): Promise<number> {
       if (!id || !filePath) { console.log(yellow("Usage: ado wi attach <id> --file <path> [--comment <text>]")); return 1; }
       return runCmd((c) => cmd.wiAttach(c, { id, filePath, comment: flagStr(flags, "comment"), profile }));
     }
+    case "attachments": {
+      const id = parseWorkItemId(positional[0]);
+      if (!id) { console.log(yellow("Usage: ado wi attachments <id> [--dest <folder>]")); return 1; }
+      return runCmd((c) => cmd.wiAttachments(c, { id, dest: flagStr(flags, "dest"), profile }));
+    }
     case "query": {
       const wiql = flagStr(flags, "wiql") ?? positional[0];
       if (!wiql) { console.log(yellow("Usage: ado wi query \"SELECT [System.Id] FROM WorkItems WHERE ...\"")); return 1; }
@@ -1166,7 +1171,7 @@ const USAGE = [
   `    ${cyan("ado profile [list|use <name>]")}          Show/list/switch ADO profile`,
   `    ${cyan("ado pr <list|get|threads|diff|context|comment|vote|select|file|create|complete|abandon|publish|reviewers|chain>")}`,
   `    ${cyan("ado pipeline <list|runs|run>")}`,
-  `    ${cyan("ado wi <list|get|types|fields|query|update|link|attach|comment|related|create|create-child>")}`,
+  `    ${cyan("ado wi <list|get|types|fields|query|update|link|attach|attachments|comment|related|create|create-child>")}`,
   `    ${cyan("npx @cioffinahuel/opencode-ado --help")}  Show this help`,
   "",
 ].join("\n");

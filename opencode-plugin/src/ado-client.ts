@@ -403,6 +403,31 @@ export class AdoClient {
     return attachmentUrl;
   }
 
+  /** List files attached to a work item. */
+  async listAttachments(id: number): Promise<Array<{ name: string; url: string; comment?: string; size?: number }>> {
+    const wi = await this.getWorkItem(id, { expandRelations: true });
+    return (wi.relations ?? [])
+      .filter((r: any) => r.rel === "AttachedFile")
+      .map((r: any) => ({
+        name: r.attributes?.name ?? "unnamed",
+        url: r.url,
+        comment: r.attributes?.comment,
+        size: r.attributes?.resourceSize,
+      }));
+  }
+
+  /** Download an attachment by its ADO attachment URL. */
+  async downloadAttachment(url: string): Promise<Buffer> {
+    const res = await fetch(url, {
+      headers: { Authorization: this.authHeader, Accept: "application/octet-stream" },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`ADO ${res.status}: ${body.slice(0, 200)}`);
+    }
+    return Buffer.from(await res.arrayBuffer());
+  }
+
   // ─── Pipelines ───────────────────────────────────────────────────
 
   async listPipelines(): Promise<any[]> {

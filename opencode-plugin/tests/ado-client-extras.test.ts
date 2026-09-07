@@ -96,3 +96,33 @@ describe("AdoClient.linkWorkItems", () => {
     expect(await makeClient().linkWorkItems(1, 42, "System.LinkTypes.Related")).toBe(true);
   });
 });
+
+describe("AdoClient.listAttachments", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => { fetchSpy = vi.spyOn(globalThis, "fetch"); });
+  afterEach(() => { fetchSpy.mockRestore(); });
+
+  it("returns only AttachedFile relations with their metadata", async () => {
+    fetchSpy.mockResolvedValueOnce(jsonResponse({
+      id: 42,
+      relations: [
+        { rel: "System.LinkTypes.Hierarchy-Reverse", url: "https://dev.azure.com/testorg/_apis/wit/workItems/7" },
+        {
+          rel: "AttachedFile",
+          url: "https://dev.azure.com/testorg/_apis/wit/attachments/guid-1",
+          attributes: { name: "screenshot.png", comment: "repro", resourceSize: 1234 },
+        },
+      ],
+    }));
+
+    const files = await makeClient().listAttachments(42);
+
+    expect(files).toEqual([{
+      name: "screenshot.png",
+      url: "https://dev.azure.com/testorg/_apis/wit/attachments/guid-1",
+      comment: "repro",
+      size: 1234,
+    }]);
+  });
+});

@@ -280,6 +280,15 @@ export const D = {
       profile: "Profile override",
     },
   },
+  wi_attachments: {
+    name: "ado_wi_attachments",
+    description: "List files attached to a work item (images, docs). Optionally download them to a local folder",
+    params: {
+      id: "Work item ID",
+      dest: "Optional local folder to download the attachments into",
+      profile: "Profile override",
+    },
+  },
   wi_query: {
     name: "ado_wi_query",
     description: "Run raw WIQL. Use it to filter by custom fields that ado_wi_list does not cover",

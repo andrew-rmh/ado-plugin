@@ -7,8 +7,8 @@
  * formatted string the caller prints / returns to the LLM.
  */
 
-import { readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { basename, join } from "node:path";
 import type { AdoConfig } from "./shared.js";
 import { shortBranch, fmtPR, fmtPRDetail, fmtThread, fmtWorkItem, fmtWorkItemDetail } from "./shared.js";
 import { getActiveProfile, setActiveProfile, setSelectedPr } from "./profile-store.js";
@@ -361,6 +361,31 @@ export async function wiAttach(
   const fileName = basename(args.filePath);
   await ado.attachFileToWorkItem(args.id, fileName, content, args.comment);
   return `#${args.id}: attached ${fileName} (${content.length} bytes)`;
+}
+
+export async function wiAttachments(
+  config: AdoConfig,
+  args: { id: number; dest?: string; profile?: string },
+): Promise<string> {
+  const { client: ado } = await createClientFromConfig(config, args.profile);
+  const files = await ado.listAttachments(args.id);
+  if (!files.length) return `#${args.id}: no attachments`;
+
+  const lines: string[] = [`## Attachments #${args.id}`];
+  for (const file of files) {
+    const size = file.size ? ` (${file.size} bytes)` : "";
+    const comment = file.comment ? ` — ${file.comment}` : "";
+    let saved = "";
+    if (args.dest) {
+      mkdirSync(args.dest, { recursive: true });
+      // ponytail: basename() keeps ADO-supplied names from escaping dest
+      const target = join(args.dest, basename(file.name));
+      writeFileSync(target, await ado.downloadAttachment(file.url));
+      saved = ` -> ${target}`;
+    }
+    lines.push(`- ${file.name}${size}${comment}${saved}\n  ${file.url}`);
+  }
+  return lines.join("\n");
 }
 
 export async function wiQuery(
