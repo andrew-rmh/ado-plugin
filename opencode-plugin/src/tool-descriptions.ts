@@ -60,10 +60,11 @@ export const D = {
   },
   pr_diff: {
     name: "ado_pr_diff",
-    description: "List changed files in PR",
+    description: "List changed files in PR. Pass hunks=true for the real unified diff",
     params: {
       repo: "Omit to auto-discover by PR ID",
       prId: "PR ID",
+      hunks: "true to include the unified diff of every changed file",
       profile: "Profile override",
     },
   },

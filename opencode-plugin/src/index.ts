@@ -152,9 +152,10 @@ const server: Plugin = async (input: PluginInput, options?: PluginOptions): Prom
         args: {
           repo: z.string().optional().describe(D.pr_diff.params.repo),
           prId: z.number().optional().describe(D.pr_diff.params.prId),
+          hunks: z.boolean().optional().describe(D.pr_diff.params.hunks),
           profile: z.string().optional().describe(D.pr_diff.params.profile),
         },
-        async execute(args: { repo?: string; prId?: number; profile?: string }) { return cmd.prDiff(await loadConfig(), args); },
+        async execute(args: { repo?: string; prId?: number; hunks?: boolean; profile?: string }) { return cmd.prDiff(await loadConfig(), args); },
       },
 
       [D.pr_file.name]: {

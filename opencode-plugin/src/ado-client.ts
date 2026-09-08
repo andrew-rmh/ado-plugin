@@ -273,6 +273,24 @@ export class AdoClient {
     return res;
   }
 
+  /** File content at a specific commit (empty string when the file does not exist there). */
+  async getFileContentAtCommit(repo: string, path: string, commitId: string): Promise<string> {
+    const url = `/_apis/git/repositories/${encodeURIComponent(repo)}/items`
+      + `?path=${encodeURIComponent(path)}`
+      + `&versionDescriptor.version=${encodeURIComponent(commitId)}`
+      + `&versionDescriptor.versionType=commit`
+      + `&$format=text`;
+    return this.requestRaw(url).catch(() => "");
+  }
+
+  /** Work items linked to a PR. ADO returns only ids + urls here. */
+  async getPullRequestWorkItems(repo: string, prId: number): Promise<number[]> {
+    const data = await this.request<{ value: Array<{ id: string }> }>(
+      `/_apis/git/repositories/${encodeURIComponent(repo)}/pullRequests/${prId}/workitems`,
+    );
+    return (data.value ?? []).map((w) => Number(w.id)).filter((id) => Number.isFinite(id));
+  }
+
   async getPrSourceBranch(repo: string, prId: number): Promise<string> {
     const pr = await this.getPullRequest(repo, prId);
     return (pr.sourceRefName ?? "").replace("refs/heads/", "");

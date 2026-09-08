@@ -30,10 +30,10 @@ tools into context.
 | Command | Purpose |
 | --- | --- |
 | `ado pr list` | Active PRs: pending your review + your own. |
-| `ado pr get [repo] <prId>` | PR details. |
+| `ado pr get [repo] <prId>` | PR details, including the linked work items. |
 | `ado pr threads [repo] <prId>` | PR comment threads. |
-| `ado pr diff [repo] <prId>` | Changed files in the latest iteration. |
-| `ado pr context [repo] <prId>` | Full review bundle: metadata, commits, files, threads. |
+| `ado pr diff [repo] <prId> [--hunks]` | Changed files in the latest iteration. `--hunks` adds the real unified diff of every changed file (base vs source commit). |
+| `ado pr context [repo] <prId>` | Full review bundle: metadata, linked work items, commits, files, threads. |
 | `ado pr file --path <file> [repo] <prId> [--start <n>] [--end <n>]` | File content from the PR source branch. |
 | `ado pr comment [repo] <prId> --comment <text> [--file <path>] [--line <n>]` | Add a comment, optionally anchored to a file/line. |
 | `ado pr vote [repo] <prId> <approve\|reject\|wait\|suggestions> [--comment <text>]` | Vote on the PR. |
@@ -56,6 +56,7 @@ tools into context.
 | `ado wi update <id> [--title <t>] [--description <d>] [--state <s>] [--priority <n>] [--assigned <user>] [--area <p>] [--iteration <p>] [--tags <a;b>] [--field <Name>=<value>] [--comment <text>]` | Update any field, custom ones included, and/or add a comment. |
 | `ado wi link <id> --parent\|--child\|--related\|--duplicate\|--successor\|--predecessor <targetId> [--comment <text>]` | Link two existing work items. Idempotent. |
 | `ado wi attach <id> --file <path> [--comment <text>]` | Upload a file and attach it to the work item. |
+| `ado wi attachments <id> [--dest <folder>]` | List the files attached to a work item (images, docs) with name, size and URL. `--dest` downloads them into that folder. |
 | `ado wi query "SELECT [System.Id] FROM WorkItems WHERE ..."` | Run raw WIQL. Use it to filter by custom fields that `wi list` does not cover. |
 | `ado wi comment <id> --comment <text>` | Add a comment. |
 | `ado wi fields --type <type>` | List every field of a work item type in this project (custom ones included) with data type, required flag and allowed values. Run it before creating when the project has special fields. |

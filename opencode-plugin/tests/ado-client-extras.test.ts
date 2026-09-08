@@ -126,3 +126,21 @@ describe("AdoClient.listAttachments", () => {
     }]);
   });
 });
+
+describe("AdoClient.getPullRequestWorkItems", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => { fetchSpy = vi.spyOn(globalThis, "fetch"); });
+  afterEach(() => { fetchSpy.mockRestore(); });
+
+  it("returns the linked work item ids as numbers", async () => {
+    fetchSpy.mockResolvedValueOnce(jsonResponse({
+      value: [{ id: "15497", url: "https://x/_apis/wit/workItems/15497" }, { id: "15498" }],
+    }));
+
+    const ids = await makeClient().getPullRequestWorkItems("repo", 5017);
+
+    expect(ids).toEqual([15497, 15498]);
+    expect(String(fetchSpy.mock.calls[0][0])).toContain("/pullRequests/5017/workitems");
+  });
+});

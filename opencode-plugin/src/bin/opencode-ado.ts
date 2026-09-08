@@ -398,9 +398,9 @@ async function runProfileGroup(argv: string[]): Promise<number> {
     if (!name) { console.log(yellow("Usage: ado profile use <name>")); return 1; }
     return runCmd((c) => cmd.profileUse(c, { name }));
   }
-  // Default / `get`: show active profile. Optional `--profile` override.
-  const { flags } = parseArgs(sub === "get" ? argv.slice(1) : argv);
-  return runCmd((c) => cmd.profileGet(c, { profile: flagStr(flags, "profile") }));
+  // Default / `get`: show active profile. Optional name, positional or `--profile`.
+  const { positional, flags } = parseArgs(sub === "get" ? argv.slice(1) : argv);
+  return runCmd((c) => cmd.profileGet(c, { profile: flagStr(flags, "profile") ?? positional[0] }));
 }
 
 async function runPipelineGroup(argv: string[]): Promise<number> {
@@ -442,7 +442,7 @@ async function runPrGroup(argv: string[]): Promise<number> {
     case "threads":
       return runCmd((c) => cmd.prThreads(c, { ...target, profile }));
     case "diff":
-      return runCmd((c) => cmd.prDiff(c, { ...target, profile }));
+      return runCmd((c) => cmd.prDiff(c, { ...target, hunks: flagBool(flags, "hunks"), profile }));
     case "context":
       return runCmd((c) => cmd.prContext(c, { ...target, profile }));
     case "comment": {

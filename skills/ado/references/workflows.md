@@ -5,10 +5,12 @@ steps come before mutating steps. See `commands.md` for full flag reference.
 
 ## Code review a PR
 
-1. `ado pr context <prId>` — one call: metadata, commits, changed files, threads.
-2. For files that need a closer look: `ado pr file --path <file> <prId>` (use `--start`/`--end` for large files).
-3. Leave findings as anchored comments: `ado pr comment <prId> --comment "<finding>" --file <path> --line <n>`.
-4. Vote once at the end: `ado pr vote <prId> <approve|suggestions|wait|reject> [--comment "<summary>"]`.
+1. `ado pr context <prId>` — one call: metadata, linked work items, commits, changed files, threads.
+2. `ado pr diff <prId> --hunks` — the actual unified diff. Review the hunks, not the file list.
+3. Read the linked work item (`ado wi get <id>`) so you can check the PR against its intended scope; `ado wi attachments <id>` when the ticket references screenshots.
+4. For files that need a closer look: `ado pr file --path <file> <prId>` (use `--start`/`--end` for large files).
+5. Leave findings as anchored comments: `ado pr comment <prId> --comment "<finding>" --file <path> --line <n>`.
+6. Vote once at the end: `ado pr vote <prId> <approve|suggestions|wait|reject> [--comment "<summary>"]`.
 
 Guidelines:
 - Comment BEFORE voting — a vote with unexplained rejection is useless to the author.

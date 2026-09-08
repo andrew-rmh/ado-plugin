@@ -7,7 +7,9 @@
  * formatted string the caller prints / returns to the LLM.
  */
 
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
 import { basename, join } from "node:path";
 import type { AdoConfig } from "./shared.js";
 import { shortBranch, fmtPR, fmtPRDetail, fmtThread, fmtWorkItem, fmtWorkItemDetail } from "./shared.js";
@@ -54,11 +56,25 @@ export async function prList(config: AdoConfig, args: { profile?: string }): Pro
   return out;
 }
 
+/** One-line summary of the work items linked to a PR (ADO exposes ids only). */
+async function fmtLinkedWorkItems(ado: any, repo: string, prId: number): Promise<string> {
+  const ids = await ado.getPullRequestWorkItems(repo, prId).catch(() => [] as number[]);
+  if (!ids.length) return "\nwork items: none linked";
+  const items = await ado.getWorkItemsByIds(ids, [
+    "System.Id", "System.Title", "System.State", "System.WorkItemType",
+  ]).catch(() => []);
+  if (!items.length) return `\nwork items: ${ids.map((id: number) => `#${id}`).join(" ")}`;
+  return "\nwork items: " + items
+    .map((wi: any) => `#${wi.id} ${(wi.fields?.["System.Title"] ?? "?").slice(0, 50)} [${wi.fields?.["System.State"] ?? "?"}]`)
+    .join("\n              ");
+}
+
 export async function prGet(config: AdoConfig, args: { repo?: string; prId?: number; profile?: string }): Promise<string> {
   const resolved = await resolvePrArgsAuto(config, args);
   const { client: ado, name } = await createClientFromConfig(config, resolved.profileName);
   const pr = await ado.getPullRequest(resolved.repo, resolved.prId);
-  return `## PR #${resolved.prId} ${resolved.repo} (${name})\n${fmtPRDetail(pr)}`;
+  const wis = await fmtLinkedWorkItems(ado, resolved.repo, resolved.prId);
+  return `## PR #${resolved.prId} ${resolved.repo} (${name})\n${fmtPRDetail(pr)}${wis}`;
 }
 
 export async function prThreads(config: AdoConfig, args: { repo?: string; prId?: number; profile?: string }): Promise<string> {
@@ -113,7 +129,7 @@ export async function prSelect(config: AdoConfig, args: { repo?: string; prId: n
   return `Selected: PR #${args.prId} in ${resolvedRepo}`;
 }
 
-export async function prDiff(config: AdoConfig, args: { repo?: string; prId?: number; profile?: string }): Promise<string> {
+export async function prDiff(config: AdoConfig, args: { repo?: string; prId?: number; hunks?: boolean; profile?: string }): Promise<string> {
   const resolved = await resolvePrArgsAuto(config, args);
   const { client: ado, name } = await createClientFromConfig(config, resolved.profileName);
 
@@ -129,7 +145,59 @@ export async function prDiff(config: AdoConfig, args: { repo?: string; prId?: nu
     .filter((c: any) => c.item && !c.item.isFolder)
     .map((c: any) => `[${c.changeType ?? "?"}] ${c.item.path ?? "?"}`);
 
-  return `## PR #${resolved.prId} files (${name})\n${latest.id}:${latest.sourceRefCommit?.commitId?.slice(0, 8)} ${files.length} files\n${files.join("\n")}`;
+  const header = `## PR #${resolved.prId} files (${name})\n${latest.id}:${latest.sourceRefCommit?.commitId?.slice(0, 8)} ${files.length} files`;
+  if (!args.hunks) return `${header}\n${files.join("\n")}`;
+
+  const pr = await ado.getPullRequest(resolved.repo, resolved.prId);
+  const baseCommit = pr.lastMergeTargetCommit?.commitId;
+  const headCommit = pr.lastMergeSourceCommit?.commitId;
+  if (!baseCommit || !headCommit) return `${header}\n${files.join("\n")}\n⚠ No merge commits on the PR; cannot build hunks.`;
+
+  const paths = changes
+    .filter((c: any) => c.item && !c.item.isFolder && c.item.path)
+    .map((c: any) => c.item.path as string);
+
+  const MAX_TOTAL = 60000;
+  const out: string[] = [header];
+  let budget = MAX_TOTAL;
+  for (const path of paths) {
+    if (budget <= 0) { out.push(`⚠ Truncated at ${MAX_TOTAL} chars. Use ado pr file for the rest.`); break; }
+    const [before, after] = await Promise.all([
+      ado.getFileContentAtCommit(resolved.repo, path, baseCommit),
+      ado.getFileContentAtCommit(resolved.repo, path, headCommit),
+    ]);
+    if (before === after) continue;
+    const patch = unifiedDiff(path, before, after);
+    out.push(patch.slice(0, budget));
+    budget -= patch.length;
+  }
+  return out.join("\n");
+}
+
+/**
+ * Unified diff of two in-memory blobs, produced by git itself.
+ * ponytail: shells out to `git diff --no-index` instead of shipping a diff algorithm.
+ */
+function unifiedDiff(path: string, before: string, after: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "ado-diff-"));
+  try {
+    const a = join(dir, "before"), b = join(dir, "after");
+    writeFileSync(a, before);
+    writeFileSync(b, after);
+    try {
+      execFileSync("git", ["diff", "--no-index", "--unified=3", "--no-color", "--", a, b], { encoding: "utf-8" });
+      return "";
+    } catch (err: any) {
+      // git diff --no-index exits 1 when the files differ: that is the success path.
+      const body = String(err?.stdout ?? "");
+      if (!body) throw err;
+      const hunks = body.split("\n").filter((l) => !l.startsWith("diff --git") && !l.startsWith("index ")
+        && !l.startsWith("--- ") && !l.startsWith("+++ "));
+      return `\n### ${path}\n\`\`\`diff\n${hunks.join("\n").trim()}\n\`\`\``;
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 export async function prFile(
@@ -199,6 +267,8 @@ export async function prContext(config: AdoConfig, args: { repo?: string; prId?:
   if (pr.reviewers?.length) {
     out += `\nreviewers: ${pr.reviewers.map((r: any) => `${vote(r.vote)} ${r.votedBy?.displayName || r.displayName || "?"}`).join(" | ")}\n`;
   }
+
+  out += await fmtLinkedWorkItems(ado, resolved.repo, resolved.prId) + "\n";
 
   if (commits.length) {
     out += `\n### commits (${commits.length})\n`;

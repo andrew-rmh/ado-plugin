@@ -383,25 +383,11 @@ export default function adoExtension(pi: ExtensionAPI) {
     parameters: Type.Object({
       repo: Type.Optional(Type.String({ description: D.pr_diff.params.repo })),
       prId: Type.Optional(Type.Number({ description: D.pr_diff.params.prId })),
+      hunks: Type.Optional(Type.Boolean({ description: D.pr_diff.params.hunks })),
       profile: Type.Optional(Type.String({ description: D.pr_diff.params.profile })),
     }),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const config = getConfig(ctx.cwd);
-      const resolved = await resolvePrArgsAuto(config, params);
-      const { client: ado, name } = await createClient(resolved.profileName);
-
-      const iterations = await ado.getIterations(resolved.repo, resolved.prId);
-      if (!iterations?.length) return { content: [{ type: "text", text: `No iterations for PR #${resolved.prId}` }], details: {} };
-
-      const latest = iterations[iterations.length - 1];
-      const changes = await ado.getIterationChanges(resolved.repo, resolved.prId, latest.id);
-      if (!changes?.length) return { content: [{ type: "text", text: `No changes for PR #${resolved.prId}` }], details: {} };
-
-      const files = changes
-        .filter((c: any) => c.item && !c.item.isFolder)
-        .map((c: any) => `[${c.changeType ?? "?"}] ${c.item.path ?? "?"}`);
-
-      return { content: [{ type: "text", text: `## PR #${resolved.prId} files (${name})\n${latest.id}:${latest.sourceRefCommit?.commitId?.slice(0, 8)} ${files.length} files\n${files.join("\n")}` }], details: {} };
+    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+      return asToolResult(cmd.prDiff, params);
     },
   });
 
