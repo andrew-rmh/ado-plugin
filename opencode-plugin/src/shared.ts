@@ -260,6 +260,8 @@ function plainText(value: unknown): string {
   return String(value)
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(p|div|li)>/gi, "\n")
+    // Inline images would vanish with the tags; leave a marker pointing at `wi attachments`
+    .replace(/<img\b[^>]*>/gi, "[image]")
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")
     .trim();

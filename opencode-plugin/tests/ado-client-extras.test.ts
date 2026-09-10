@@ -97,6 +97,55 @@ describe("AdoClient.linkWorkItems", () => {
   });
 });
 
+describe("AdoClient.attachFileToWorkItem", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => { fetchSpy = vi.spyOn(globalThis, "fetch"); });
+  afterEach(() => { fetchSpy.mockRestore(); });
+
+  it("uploads the raw bytes, then links the returned url as an AttachedFile", async () => {
+    const uploaded = "https://dev.azure.com/testorg/_apis/wit/attachments/guid-9";
+    fetchSpy
+      .mockResolvedValueOnce(jsonResponse({ id: "guid-9", url: uploaded }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42 }));
+
+    const content = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    const url = await makeClient().attachFileToWorkItem(42, "captura de pantalla.png", content, "repro");
+
+    expect(url).toBe(uploaded);
+
+    const [uploadUrl, uploadInit] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const parsed = new URL(String(uploadUrl));
+    expect(uploadInit.method).toBe("POST");
+    expect((uploadInit.headers as Record<string, string>)["Content-Type"]).toBe("application/octet-stream");
+    // The file name survives the api-version query merge intact
+    expect(parsed.searchParams.get("fileName")).toBe("captura de pantalla.png");
+    expect(parsed.searchParams.get("api-version")).toBeTruthy();
+    expect(new Uint8Array(uploadInit.body as Uint8Array)).toEqual(new Uint8Array(content));
+
+    const patch = JSON.parse((fetchSpy.mock.calls[1][1] as RequestInit).body as string);
+    expect(patch[0]).toEqual({
+      op: "add",
+      path: "/relations/-",
+      value: {
+        rel: "AttachedFile",
+        url: uploaded,
+        attributes: { name: "captura de pantalla.png", comment: "repro" },
+      },
+    });
+  });
+
+  it("does not link anything when the upload itself fails", async () => {
+    fetchSpy.mockResolvedValueOnce(new Response("quota exceeded", { status: 413 }));
+
+    await expect(
+      makeClient().attachFileToWorkItem(42, "big.png", Buffer.from("x")),
+    ).rejects.toThrow("ADO 413");
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("AdoClient.listAttachments", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
@@ -124,6 +173,40 @@ describe("AdoClient.listAttachments", () => {
       comment: "repro",
       size: 1234,
     }]);
+  });
+
+  it("includes images pasted inline in rich text fields", async () => {
+    fetchSpy.mockResolvedValueOnce(jsonResponse({
+      id: 42,
+      fields: {
+        "System.Description":
+          '<div>broken<img src="https://dev.azure.com/testorg/_apis/wit/attachments/guid-2?fileName=paste.png&amp;api-version=7.0"></div>',
+        "Microsoft.VSTS.TCM.ReproSteps":
+          "<img src='https://dev.azure.com/testorg/_apis/wit/attachments/guid-3'>",
+        "System.Title": "no images here",
+      },
+      relations: [{
+        rel: "AttachedFile",
+        url: "https://dev.azure.com/testorg/_apis/wit/attachments/guid-1",
+        attributes: { name: "screenshot.png" },
+      }],
+    }));
+
+    const files = await makeClient().listAttachments(42);
+
+    expect(files.map((f) => f.name)).toEqual(["screenshot.png", "paste.png", "guid-3.png"]);
+    expect(files[1].url).toContain("&api-version=7.0");
+  });
+
+  it("does not duplicate an inline image that is also a relation", async () => {
+    const url = "https://dev.azure.com/testorg/_apis/wit/attachments/guid-1?fileName=shot.png";
+    fetchSpy.mockResolvedValueOnce(jsonResponse({
+      id: 42,
+      fields: { "System.Description": `<img src="${url}">` },
+      relations: [{ rel: "AttachedFile", url, attributes: { name: "shot.png" } }],
+    }));
+
+    expect(await makeClient().listAttachments(42)).toHaveLength(1);
   });
 });
 

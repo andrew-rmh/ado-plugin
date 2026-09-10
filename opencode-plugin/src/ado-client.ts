@@ -421,10 +421,14 @@ export class AdoClient {
     return attachmentUrl;
   }
 
-  /** List files attached to a work item. */
+  /**
+   * List files attached to a work item, including images pasted inline in rich
+   * text fields. Azure Boards uploads those to the same attachments endpoint but
+   * never adds an AttachedFile relation, so they only exist as <img> tags.
+   */
   async listAttachments(id: number): Promise<Array<{ name: string; url: string; comment?: string; size?: number }>> {
     const wi = await this.getWorkItem(id, { expandRelations: true });
-    return (wi.relations ?? [])
+    const files = (wi.relations ?? [])
       .filter((r: any) => r.rel === "AttachedFile")
       .map((r: any) => ({
         name: r.attributes?.name ?? "unnamed",
@@ -432,6 +436,14 @@ export class AdoClient {
         comment: r.attributes?.comment,
         size: r.attributes?.resourceSize,
       }));
+
+    const seen = new Set(files.map((f: { url: string }) => f.url));
+    for (const url of inlineAttachmentUrls(wi.fields ?? {})) {
+      if (seen.has(url)) continue;
+      seen.add(url);
+      files.push({ name: attachmentFileName(url), url, comment: "inline" });
+    }
+    return files;
   }
 
   /** Download an attachment by its ADO attachment URL. */
@@ -654,6 +666,36 @@ export class AdoClient {
 }
 
 // ─── Business logic helpers ───────────────────────────────────────────────
+
+/** Attachment URLs referenced by <img> tags in any rich text field of a work item. */
+export function inlineAttachmentUrls(fields: Record<string, unknown>): string[] {
+  const urls: string[] = [];
+  for (const value of Object.values(fields)) {
+    if (typeof value !== "string" || !value.includes("<img")) continue;
+    for (const match of value.matchAll(/<img[^>]+src\s*=\s*["']([^"']+)["']/gi)) {
+      const url = decodeHtmlEntities(match[1]);
+      if (/\/_apis\/wit\/attachments\//i.test(url)) urls.push(url);
+    }
+  }
+  return urls;
+}
+
+/** Best-effort file name for an ADO attachment URL. */
+export function attachmentFileName(url: string): string {
+  const named = /[?&]fileName=([^&]+)/i.exec(url);
+  if (named) return decodeURIComponent(named[1]);
+  const guid = url.split("?")[0].split("/").pop();
+  return guid ? `${guid}.png` : "unnamed";
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
 
 export function guessLang(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";

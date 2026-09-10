@@ -442,6 +442,7 @@ export async function wiAttachments(
   if (!files.length) return `#${args.id}: no attachments`;
 
   const lines: string[] = [`## Attachments #${args.id}`];
+  const used = new Set<string>();
   for (const file of files) {
     const size = file.size ? ` (${file.size} bytes)` : "";
     const comment = file.comment ? ` — ${file.comment}` : "";
@@ -449,13 +450,25 @@ export async function wiAttachments(
     if (args.dest) {
       mkdirSync(args.dest, { recursive: true });
       // ponytail: basename() keeps ADO-supplied names from escaping dest
-      const target = join(args.dest, basename(file.name));
+      const target = join(args.dest, uniqueName(basename(file.name), used));
       writeFileSync(target, await ado.downloadAttachment(file.url));
       saved = ` -> ${target}`;
     }
     lines.push(`- ${file.name}${size}${comment}${saved}\n  ${file.url}`);
   }
   return lines.join("\n");
+}
+
+/** Disambiguate repeated file names so saving never overwrites a previous one. */
+function uniqueName(name: string, used: Set<string>): string {
+  if (!used.has(name)) { used.add(name); return name; }
+  const dot = name.lastIndexOf(".");
+  const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+  let n = 2;
+  while (used.has(`${stem}-${n}${ext}`)) n++;
+  const unique = `${stem}-${n}${ext}`;
+  used.add(unique);
+  return unique;
 }
 
 export async function wiQuery(
