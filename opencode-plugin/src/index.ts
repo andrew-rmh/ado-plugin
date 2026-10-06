@@ -1,5 +1,5 @@
 /**
- * OpenCode ADO Plugin — V1 Module Entry Point.
+ * OpenCode ADO Plugin — V1 and V2 module entry points.
  *
  *
  * Server module — PR workflow tools
@@ -27,6 +27,7 @@
  */
 
 import type { Plugin, PluginInput, Hooks, PluginOptions, PluginModule } from "@opencode-ai/plugin";
+import { Plugin as V2Plugin } from "@opencode/plugin";
 import { z } from "zod/v4";
 import type { AdoConfig } from "./shared.js";
 import { asAdoConfig } from "./shared.js";
@@ -490,7 +491,39 @@ const server: Plugin = async (input: PluginInput, options?: PluginOptions): Prom
   };
 };
 
-const pluginModule: PluginModule & { id: string } = {
+const v2Plugin = V2Plugin.define({
+  id: "@cioffinahuel/opencode-ado",
+  async setup(ctx) {
+    // Reuse the same command implementations and schemas as the V1 entrypoint.
+    // V2 plugin options replace the V1 config.get() fallback.
+    const legacyHooks = await server({
+      client: {
+        config: {
+          get: async () => ({ data: { ado: ctx.options } }),
+        },
+      },
+    } as unknown as PluginInput, ctx.options);
+    const tools = legacyHooks.tool ?? {};
+
+    await ctx.tool.transform((editor) => {
+      for (const [name, definition] of Object.entries(tools)) {
+        const input = z.toJSONSchema(z.object(definition.args));
+        editor.add({
+          name,
+          description: definition.description,
+          input,
+          async execute(args) {
+            const result = await definition.execute(args as never, {} as never);
+            return { content: typeof result === "string" ? result : JSON.stringify(result) };
+          },
+        });
+      }
+    });
+  },
+});
+
+const pluginModule: PluginModule & typeof v2Plugin & { id: string } = {
+  ...v2Plugin,
   id: "@cioffinahuel/opencode-ado",
   server,
 };
